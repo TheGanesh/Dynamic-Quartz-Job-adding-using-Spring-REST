@@ -1,0 +1,109 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:mvc="http://www.springframework.org/schema/mvc" xmlns:oxm="http://www.springframework.org/schema/oxm"
+	xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+	xsi:schemaLocation="
+        http://www.springframework.org/schema/beans     
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd
+        http://www.springframework.org/schema/util 
+        http://www.springframework.org/schema/util/spring-util-3.0.xsd
+        http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd
+        http://www.springframework.org/schema/oxm http://www.springframework.org/schema/oxm/spring-oxm-3.0.xsd
+       		http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit-1.1.xsd">
+
+	<context:component-scan base-package="com.bestbuy.eos.alerts" />
+	<mvc:annotation-driven />
+
+	<context:property-placeholder
+		location="${alerts.properties.loc:classpath:alerts.properties}"
+		system-properties-mode="OVERRIDE" />
+
+	<bean id="mySqlDataSource" class="org.apache.commons.dbcp.BasicDataSource"
+		destroy-method="close">
+		<property name="driverClassName" value="com.mysql.jdbc.Driver" />
+		<property name="url" value="${mysql.url}" />
+		<property name="username" value="${mysql.username}" />
+		<property name="password" value="${mysql.password}" />
+		<property name="initialSize" value="${mysql.initialSize}" />
+		<property name="maxActive" value="${mysql.maxActive}" />
+		<property name="maxIdle" value="${mysql.maxIdle}" />
+		<property name="maxWait" value="${mysql.maxWait}" />
+		<property name="validationQuery" value="SELECT 1" />
+		<property name="testOnBorrow" value="true" />
+	</bean>
+
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<constructor-arg type="javax.sql.DataSource">
+			<ref bean="mySqlDataSource"></ref>
+		</constructor-arg>
+	</bean>
+
+	<bean name="jobDetailBean" class="org.springframework.scheduling.quartz.JobDetailBean"
+		scope="prototype">
+		<property name="jobClass" value="com.bestbuy.eos.alerts.QuartzJob" />
+		<property name="jobDataAsMap">
+			<map>
+				<entry key="jdbcTemplate" value-ref="jdbcTemplate" />
+				<entry key="resultSetExtractor" value-ref="resultSetExtractor" />				
+				<entry key="mailUtils" value-ref="mailUtils" />
+			</map>
+		</property>
+	</bean>
+
+<bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+	<property name="host"><value>smtp.gmail.com</value></property>
+        <property name="port"><value>587</value></property>
+        <property name="protocol"><value>smtp</value></property>
+        <property name="username"><value>capiv.virtualization</value></property>
+        <property name="password"><value>capiv123</value></property>
+        <property name="javaMailProperties">
+            <props>
+                <prop key="mail.smtp.auth">true</prop>
+                <prop key="mail.smtp.starttls.enable">true</prop>
+                <prop key="mail.smtp.quitwait">false</prop>
+            </props>
+        </property>
+	</bean>
+
+	<bean
+		class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
+		<property name="messageConverters">
+			<util:list>
+				<bean
+					class="org.springframework.http.converter.xml.MarshallingHttpMessageConverter">
+					<property name="marshaller" ref="jaxb2Marshaller" />
+					<property name="unmarshaller" ref="jaxb2Marshaller" />
+				</bean>
+			</util:list>
+		</property>
+	</bean>
+
+	<oxm:jaxb2-marshaller id="jaxb2Marshaller">
+		<oxm:class-to-be-bound name="com.bestbuy.eos.jaxb.JobDetails" />
+		<oxm:class-to-be-bound name="com.bestbuy.eos.jaxb.Response" />
+		<oxm:class-to-be-bound name="com.bestbuy.eos.jaxb.RunningJobs" />
+	</oxm:jaxb2-marshaller>
+
+	<bean id="scheduler"
+		class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+		<property name="jobDetails">
+			<list>
+				<ref bean="jobDetailBean" />
+			</list>
+		</property>
+		<property name="triggers">
+			<list />
+		</property>
+		<property name="autoStartup" value="true" />
+		<property name="quartzProperties">
+			<props>
+				<prop key="org.quartz.threadPool.threadCount">2</prop>
+			</props>
+		</property>
+	</bean>
+
+
+</beans>
